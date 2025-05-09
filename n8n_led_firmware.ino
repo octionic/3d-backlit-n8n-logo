@@ -1,4 +1,4 @@
-// Firmware for 3D backlit n8n logo (Capacitive touch version)
+// Firmware for 3D backlit n8n logo (Controller: XIAO SAMD21)
 
 #include <Adafruit_NeoPixel.h>
 
