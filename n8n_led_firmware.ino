@@ -1,18 +1,17 @@
-// Firmware for 3D backlit n8n logo (Controller: XIAO SAMD21)
+// Firmware for 3D backlit n8n logo (Controller: XIAO ESP32C3)
 #include <Adafruit_NeoPixel.h>
-#define LED_PIN     1
+#define LED_PIN     3
+#define TOUCH_PIN   4     // Capacitive touch signal pin
 #define LED_COUNT   56
-#define BRIGHTNESS  50 // Set BRIGHTNESS to about 1/5 (max = 255)
-#define TOUCH_PIN   2  // Capacitive touch signal pin
+#define BRIGHTNESS  50    // Set BRIGHTNESS to about 1/5 (max = 255)
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
-
 bool isOn = false;
 bool lastTouch = false;
 
 // Colors
-uint32_t redColor = strip.Color(255, 0, 6);
-uint32_t offColor = strip.Color(0, 0, 0);
+uint32_t redColor;
+uint32_t offColor;
 
 // LED groups for pattern turn-off (0-based indexing)
 const int ledGroups[][5] = {
@@ -45,28 +44,35 @@ const int ledGroups[][5] = {
 };
 const int numGroups = 26;
 
+// Function declarations
+void animateOn(uint32_t color, int wait);
+void patternTurnOff(int wait);
+
 void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
-  delay(10);
   pinMode(TOUCH_PIN, INPUT);
-  strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
-  strip.show();            // Turn OFF all pixels ASAP
+  
+  strip.begin(); // INITIALIZE NeoPixel strip object
+  strip.show(); // Turn OFF all pixels ASAP
   strip.setBrightness(BRIGHTNESS);
-  delay(2000);             // Optional boot delay
+  
+  // Initialize colors
+  redColor = strip.Color(255, 0, 6);
+  offColor = strip.Color(0, 0, 0);
+  
+  delay(2000); // Optional boot delay
 }
 
 void loop() {
+  // Read touch sensor (using digital read for simplicity)
   bool currentTouch = digitalRead(TOUCH_PIN);
   
-  // Handle touch release (only respond to button release, not press)
   if (!currentTouch && lastTouch) {
     if (!isOn) {
-      // Device is off, turn on with red animation
       animateOn(redColor, 40);
       isOn = true;
     } else {
-      // Device is on, turn off with pattern animation
       patternTurnOff(40);
       isOn = false;
     }
