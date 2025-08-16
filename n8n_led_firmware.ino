@@ -1,16 +1,20 @@
 // Firmware for 3D backlit n8n logo (Controller: XIAO ESP32C3)
 #include <Adafruit_NeoPixel.h>
 #define LED_PIN     3
-#define TOUCH_PIN   4     // Capacitive touch signal pin
+#define TOUCH_PIN   4
 #define LED_COUNT   56
-#define BRIGHTNESS  50    // Set BRIGHTNESS to about 1/5 (max = 255)
-
+#define BRIGHTNESS  50
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+
 bool isOn = false;
 bool lastTouch = false;
+bool demoMode = false;
+unsigned long touchStartTime = 0;
+bool touchPressed = false;
 
 // Colors
 uint32_t redColor;
+uint32_t orangeColor;
 uint32_t offColor;
 
 // LED groups for pattern turn-off (0-based indexing)
@@ -44,42 +48,62 @@ const int ledGroups[][5] = {
 };
 const int numGroups = 26;
 
-// Function declarations
-void animateOn(uint32_t color, int wait);
-void patternTurnOff(int wait);
-
 void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   pinMode(TOUCH_PIN, INPUT);
   
-  strip.begin(); // INITIALIZE NeoPixel strip object
-  strip.show(); // Turn OFF all pixels ASAP
+  strip.begin();
+  strip.show();
   strip.setBrightness(BRIGHTNESS);
   
   // Initialize colors
   redColor = strip.Color(255, 0, 6);
+  orangeColor = strip.Color(255, 80, 0);
   offColor = strip.Color(0, 0, 0);
   
-  delay(2000); // Optional boot delay
+  delay(2000);
 }
 
 void loop() {
-  // Read touch sensor (using digital read for simplicity)
   bool currentTouch = digitalRead(TOUCH_PIN);
   
-  if (!currentTouch && lastTouch) {
-    if (!isOn) {
-      animateOn(redColor, 40);
-      isOn = true;
-    } else {
-      patternTurnOff(40);
-      isOn = false;
-    }
+  // Handle touch press detection
+  if (currentTouch && !lastTouch) {
+    touchStartTime = millis();
+    touchPressed = true;
   }
-  
+
+  // Handle touch release
+  if (!currentTouch && lastTouch) {
+    if (touchPressed) {
+      unsigned long pressDuration = millis() - touchStartTime;
+      
+      if (pressDuration >= 1500) {
+        // Long press - activate demo mode
+        demoMode = true;
+        isOn = true;
+      } else {
+        // Short press - toggle normal operation
+        if (!isOn) {
+          animateOn(redColor, 40);
+          isOn = true;
+        } else {
+          patternTurnOff(40);
+          isOn = false;
+        }
+      }
+    }
+    touchPressed = false;
+  }
+
+  // Run demo mode if active
+  if (demoMode) {
+    runDemoMode();
+  }
+
   lastTouch = currentTouch;
-  delay(50); // Simple debounce
+  delay(50);
 }
 
 // Turn on LEDs one after another with a color (0 to 55)
@@ -104,4 +128,77 @@ void patternTurnOff(int wait) {
     strip.show();
     delay(wait);
   }
+}
+
+void walkingTrailAnimation(uint32_t walkColor, uint32_t bgColor, int wait) {
+  int permanentPositions[LED_COUNT] = {0};
+  
+  for (int i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, bgColor);
+  }
+  strip.show();
+
+  for (int pass = 0; pass < strip.numPixels(); pass++) {
+    int endPosition = strip.numPixels() - 1 - pass;
+    
+    for (int pos = 0; pos <= endPosition; pos++) {
+      if (checkDemoInterrupt()) return;
+      
+      for (int i = 0; i < strip.numPixels(); i++) {
+        if (i == pos) {
+          strip.setPixelColor(i, walkColor);
+        } else if (permanentPositions[i] == 1) {
+          strip.setPixelColor(i, walkColor);
+        } else {
+          strip.setPixelColor(i, bgColor);
+        }
+      }
+      strip.show();
+      delay(wait);
+      
+      if (pos == endPosition) {
+        permanentPositions[endPosition] = 1;
+      }
+    }
+  }
+}
+
+void runDemoMode() {
+  while (demoMode) {
+    walkingTrailAnimation(orangeColor, redColor, 70);
+    if (!demoMode) {
+      setAllLEDs(redColor);
+      return;
+    }
+    
+    delay(2000);
+    
+    walkingTrailAnimation(redColor, orangeColor, 70);
+    if (!demoMode) {
+      setAllLEDs(redColor);
+      return;
+    }
+    
+    delay(2000);
+  }
+}
+
+bool checkDemoInterrupt() {
+  bool currentTouch = digitalRead(TOUCH_PIN);
+  if (currentTouch && !lastTouch) {
+    demoMode = false;
+    setAllLEDs(redColor);
+    isOn = true;
+    lastTouch = currentTouch;
+    return true;
+  }
+  lastTouch = currentTouch;
+  return false;
+}
+
+void setAllLEDs(uint32_t color) {
+  for (int i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, color);
+  }
+  strip.show();
 }
